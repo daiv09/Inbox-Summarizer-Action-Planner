@@ -1,0 +1,609 @@
+{
+  "name": "Inbox Summarizer & Action Planner",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "readStatus": "unread"
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -64,
+        -80
+      ],
+      "id": "e07c5428-f9ad-4664-9e89-037ff731748c",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth": {
+            "id": "REPLACE_WITH_YOUR_GMAIL_OAUTH_ID",
+            "name": "REPLACE_WITH_YOUR_GMAIL_ACCOUNT_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        304,
+        144
+      ],
+      "id": "3890278a-fe27-4a82-8f84-f87dafc292a4",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an email classification system.\n\nYour task:  \nClassify the following email into exactly ONE of the given categories.  \nReturn only the numeric ID of the category — no words, no explanation, no extra text.\n\nCategories:  \n0 - Primary → General important emails that don’t fit other categories.  \n1 - Social Media → Notifications from platforms like Facebook, Instagram, LinkedIn, Twitter, YouTube, etc.  \n2 - Promotions → Marketing campaigns, offers, sales, product promotions.  \n3 - Subscriptions → Newsletters, recurring updates, mailing lists.  \n4 - Work & Projects → Professional or project-related communications.  \n5 - Personal → Friends, family, personal acquaintances.  \n6 - Financial & Bills → Invoices, receipts, payments, salary slips, tax docs. \n7 - Spam → Unwanted, phishing, or junk emails.  \n8 - Archived Emails → Informational messages kept for record, no action needed.  \n9 - Action → Requires a specific follow-up, response, or task.\n\nRules:  \n- Return ONLY the numeric ID (0–9) corresponding to the most relevant category.  \n- If multiple categories could apply, choose the most important based on urgency or primary purpose.  \n- Do NOT return the category name. Do NOT add punctuation or explanations.\n\nFrom: {{ $json.From }}\nSubject: {{ $json.Subject }}\nEmail: {{ $json[\"Subject\"] }} {{ $json.snippet }}",
+        "options": {
+          "systemMessage": "You are a helpful assistant and return the output in strictly JSON format, especially the category Id in which the email should be categorised."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        160,
+        -80
+      ],
+      "id": "32025992-cb60-4e1b-82de-de1ff7a2215d",
+      "name": "Email Classifier Agent"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Gmail Trigger').item.json.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1104,
+        240
+      ],
+      "id": "18813fa3-662e-4d97-b094-0211e360bcc6",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Summarize the following email in 2-3 plain sentences for a daily digest.\nFocus on the main point and remove greetings/signatures.\n  Email: {{ $('Gmail Trigger').item.json.Subject }} {{ $('Gmail Trigger').item.json.snippet }}\n",
+        "options": {
+          "systemMessage": "You are a helpful assistant and return the output in strictly JSON format, especially the category in which the email should be categorised."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        16
+      ],
+      "id": "ce68818a-7400-49c1-976d-f6e4e2c2dbc2",
+      "name": "Summarizer Agent"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Extract any actionable task from this email. Return JSON with keys: action, due_date (if mentioned), otherwise “none”. Email: {{ $('Gmail Trigger').item.json.Subject }} {{ $('Gmail Trigger').item.json.snippet }}\n\nThe task should contain a summary and Description related to {{ $('Gmail Trigger').item.json.Subject }}\n",
+        "options": {
+          "systemMessage": "You are a helpful assistant and give the output text in JSON format. "
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1312,
+        16
+      ],
+      "id": "c739c26c-24de-43c4-b3cf-2e229ed816fb",
+      "name": "Action Extractor Agent"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Gmail Trigger').item.json.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1456,
+        240
+      ],
+      "id": "697355f1-7068-4ab3-84d3-533a5578f934",
+      "name": "Simple Memory2"
+    },
+    {
+      "parameters": {
+        "model": "deepseek/deepseek-r1:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        176,
+        144
+      ],
+      "id": "f8257b5f-963c-4a56-a7ba-3c0b20db8da0",
+      "name": "Deepseek r1",
+      "credentials": {
+              "openRouterApi": {
+                "id": "REPLACE_WITH_YOUR_OPENROUTER_API_ID",
+                "name": "REPLACE_WITH_YOUR_OPENROUTER_ACCOUNT_NAME"
+            }
+        }
+    },
+    {
+      "parameters": {
+        "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        976,
+        240
+      ],
+      "id": "3f1f7df7-bcc0-42d3-bcc3-0a5d8a46d677",
+      "name": "Llama 3.3-70b-instruct",
+      "credentials": {
+        "openRouterApi": {
+                "id": "REPLACE_WITH_YOUR_OPENROUTER_API_ID",
+                "name": "REPLACE_WITH_YOUR_OPENROUTER_ACCOUNT_NAME"
+            }
+        }
+    },
+    {
+      "parameters": {
+        "model": "deepseek/deepseek-r1-distill-llama-70b:free",
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        240
+      ],
+      "id": "349c4047-6be1-4c73-9c91-5ac8563ed6bd",
+      "name": "Deephermes 3 Llama 3-8b-preview",
+      "credentials": {
+              "openRouterApi": {
+                "id": "REPLACE_WITH_YOUR_OPENROUTER_API_ID",
+                "name": "REPLACE_WITH_YOUR_OPENROUTER_ACCOUNT_NAME"
+              }
+            }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "messageId": "={{ $('Gmail Trigger').item.json.id }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        736,
+        -176
+      ],
+      "id": "f9f536a9-8220-42d3-bb6f-ca536ddf686f",
+      "name": "Delete a message",
+      "webhookId": "a31d6bf9-c53a-407a-a82d-8afada3228bc",
+      "credentials": {
+        "gmailOAuth": {
+            "id": "REPLACE_WITH_YOUR_GMAIL_OAUTH_ID",
+          "name": "REPLACE_WITH_YOUR_GMAIL_ACCOUNT_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "1",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "e62516ec-5141-4329-92ae-b45e7fcf4746"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Spam"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1951738d-5ec0-4cd2-8383-3b0f346521fa",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "7",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEquals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Not Spam"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        512,
+        -80
+      ],
+      "id": "4a0e56bb-2859-481b-b5f2-22ef339e0166",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "298c9ce7-014e-47b4-b370-980aca25b7ed",
+              "leftValue": "={{ $json.output }}",
+              "rightValue": "7",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        16
+      ],
+      "id": "e3358897-98ac-4b36-8700-c692463f68ee",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "9f4c51f073219299b946df0744e68dec6aa2e3772ab282fb1c9c9b0c6dfbbe9e@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "n8n-Calender"
+        },
+        "additionalFields": {
+          "color": "7",
+          "description": "={{ $('Summarizer Agent').item.json.output.replace(/\\s*\\{.*\\}\\s*$/, '') }}\n",
+          "summary": "={{ JSON.parse($json.output.replace(/^\\[Object:\\s*/, '').replace(/\\]$/, '')).action }}\n"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1664,
+        16
+      ],
+      "id": "7711ccfb-9f27-450a-a636-e2672166eb95",
+      "name": "Create an event",
+      "credentials": {
+          "googleCalendarOAuth2Api": {
+                    "id": "REPLACE_WITH_YOUR_GOOGLE_CALENDAR_OAUTH_ID",
+                    "name": "REPLACE_WITH_YOUR_GOOGLE_CALENDAR_ACCOUNT_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "block",
+        "blockId": {
+          "__rl": true,
+          "value": "https://www.notion.so/n8n-Inbox-Summariser-24ee68320eea80e890e1f02c32c7fac1?source=copy_link#24ee68320eea8005b28dff7a9cdcb4c3",
+          "mode": "url"
+        },
+        "blockUi": {
+          "blockValues": [
+            {
+              "type": "to_do",
+              "textContent": "={{ JSON.parse($('Action Extractor Agent').item.json.output.replace(/^\\[Object:\\s*/, '').replace(/\\]$/, '')).action }}\n"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1888,
+        16
+      ],
+      "id": "5452f24e-e307-4471-8bdd-e674294c1061",
+      "name": "Append a block",
+      "credentials": {
+          "notionApi": {
+                    "id": "REPLACE_WITH_YOUR_NOTION_API_ID",
+                    "name": "REPLACE_WITH_YOUR_NOTION_ACCOUNT_NAME"
+                  }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Email Classification\n",
+        "height": 416,
+        "width": 352,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        96,
+        -144
+      ],
+      "typeVersion": 1,
+      "id": "e0b45cf2-6464-47af-b510-0a418ff1e91c",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Email Summarization",
+        "height": 448,
+        "width": 320,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        912,
+        -48
+      ],
+      "typeVersion": 1,
+      "id": "ccfe119f-8817-4056-a738-54737bfae026",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Action Extraction\n",
+        "height": 448,
+        "width": 352,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1248,
+        -48
+      ],
+      "typeVersion": 1,
+      "id": "6ac6d8c8-1e9c-48e1-828e-c538da7d6c76",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "# **Inbox Summarizer & Action Planner**",
+        "height": 736,
+        "width": 2224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -128,
+        -288
+      ],
+      "typeVersion": 1,
+      "id": "b9df69db-3621-4052-9d2f-aea6e4834a43",
+      "name": "Sticky Note3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Email Classifier Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Email Classifier Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Summarizer Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Classifier Agent": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarizer Agent": {
+      "main": [
+        [
+          {
+            "node": "Action Extractor Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory2": {
+      "ai_memory": [
+        [
+          {
+            "node": "Action Extractor Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Extractor Agent": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deepseek r1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Email Classifier Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Llama 3.3-70b-instruct": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Summarizer Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deephermes 3 Llama 3-8b-preview": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Action Extractor Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Delete a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Summarizer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Append a block",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "9f817d40-28ab-4042-86de-89aea2cc4c9b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c45f4b65d74c29ffd8df066082112d3dd5a5cd417a3c17df1b6fa1ec24ac87d9"
+  },
+  "id": "1VUrYNK2cv7Oi28X",
+  "tags": [
+    {
+      "createdAt": "2025-08-10T19:40:57.698Z",
+      "updatedAt": "2025-08-10T19:40:57.698Z",
+      "id": "XMmP4Pjv8hQFEV3j",
+      "name": "first-agent"
+    },
+    {
+      "createdAt": "2025-08-10T19:40:51.058Z",
+      "updatedAt": "2025-08-10T19:40:51.058Z",
+      "id": "sXge57csL7U4SJjz",
+      "name": "n8n"
+    }
+  ]
+}
